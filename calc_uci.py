@@ -4,31 +4,32 @@ import math
 import os
 from statistics import mean, stdev
 
+from config import Config
+
 
 # ==========================================
 # DEFAULT CONFIGURATION
 # CLI flags can override any of these.
+# 标定与物理常数统一取自 config.py，与 detect/plot 保持一致。
 # ==========================================
-INPUT_CSV = "drop_pixel_coords/drop_pixel_coords_sample12.csv"
+INPUT_CSV = "drop_pixel_coords.csv"
 METHOD = "free_fall"  # "free_fall" or "forced_down"
 VOLTAGE_V = 300.0
-PLATE_SPACING_M = 0.003175
 TEMPERATURE_C = 23.0
 PRESSURE_TORR = 757.0
 RHO_OIL_KG_M3 = 800.0
 VELOCITY_THRESHOLD_MPS = 5e-5
-COORD_CEILING_Y_PX = 200.0
-COORD_FLOOR_Y_PX = 1000.0
-COORD_HEIGHT_SPAN_M = 0.003175
 DERIVATIVE_WINDOW = 11
 
-G_M_S2 = 9.81
-R_SPECIFIC_AIR = 287.058
-ELEMENTARY_CHARGE_C = 1.602176634e-19
-
-# UCI handout constant: b = 5.908e-3 torr-cm
-# Converted to SI: Pa*m
-CUNNINGHAM_B_PA_M = 5.908e-3 * 133.322 * 1e-2
+_DEFAULT = Config()
+PLATE_SPACING_M = _DEFAULT.plate_spacing_m
+COORD_CEILING_Y_PX = _DEFAULT.ceiling_y_px
+COORD_FLOOR_Y_PX = _DEFAULT.floor_y_px
+COORD_HEIGHT_SPAN_M = _DEFAULT.plate_spacing_m
+G_M_S2 = _DEFAULT.g_m_s2
+R_SPECIFIC_AIR = _DEFAULT.r_specific_air
+ELEMENTARY_CHARGE_C = _DEFAULT.elementary_charge_c
+CUNNINGHAM_B_PA_M = _DEFAULT.cunningham_b_pa_m
 
 
 def build_parser():
