@@ -5,7 +5,7 @@ __pycache__/
 # macOS
 .DS_Store
 
-# 生成的数据与中间产物
+# Generated data and intermediate artifacts
 *.csv
 *.png
 frames/

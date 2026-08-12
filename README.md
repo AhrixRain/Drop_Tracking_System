@@ -1,69 +1,69 @@
 # Drop_Tracking_System
 
-密立根油滴实验（Physics 121W）的自动追踪与分析系统：从视频帧自动追踪单个油滴的运动，经高度/速度/加速度分析，最终按 UCI 讲义方法计算油滴所带电荷。
+Automatic tracking and analysis system for the Millikan oil-drop experiment (Physics 121W): tracks a single oil drop from video frames, performs height/velocity/acceleration analysis, and finally computes the drop's charge following the UCI notes method.
 
-## 流水线
+## Pipeline
 
 ```
-视频 / 帧目录
+Video / frame directory
    │
-   ├─ detect.py          油滴检测与追踪 → drop_pixel_coords.csv（每帧坐标）
+   ├─ detect.py          Oil-drop detection and tracking → drop_pixel_coords.csv (per-frame coords)
    │
-   ├─ diff_bg_frame.py   调试可视化：原始/背景/差分/二值 四联对比图
+   ├─ diff_bg_frame.py   Debug visualization: original/background/diff/binary 2x2 comparison
    │
    ├─ plot.py
-   │   ├─ --mode trajectory       轨迹散点图（按时间着色）
-   │   └─ --mode height_velocity  高度/速度/加速度图 + height_velocity CSV
+   │   ├─ --mode trajectory        trajectory scatter plot (colored by time)
+   │   └─ --mode height_velocity   height/velocity/acceleration plots + height_velocity CSV
    │
-   └─ calc_uci.py        电荷计算 → *_calculated_results_uci.csv（含 n_e）
+   └─ calc_uci.py        Charge calculation → *_calculated_results_uci.csv (includes n_e)
 ```
 
-## 安装
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 用法
+## Usage
 
-### 1. 检测与追踪（输入视频或帧目录）
+### 1. Detection and tracking (video or frame directory input)
 
 ```bash
 python detect.py --input frames_sample18/ --output drop_pixel_coords.csv
 python detect.py --input movie.mp4 --output drop_pixel_coords.csv --fps 60
 ```
 
-可选参数：`--bg-samples`（背景采样帧数）、`--threshold`（灵敏度）、`--min-area/--max-area/--circularity`（blob 过滤）、`--gate-radius/--max-missed/--ema-alpha`（跟踪）、`--reinit-rule {largest_blob,highest_conf,nearest_center}`。
+Optional flags: `--bg-samples` (background sampling frames), `--threshold` (sensitivity), `--min-area/--max-area/--circularity` (blob filtering), `--gate-radius/--max-missed/--ema-alpha` (tracking), `--reinit-rule {largest_blob,highest_conf,nearest_center}`.
 
-### 2. 调试可视化（可选）
+### 2. Debug visualization (optional)
 
 ```bash
 python diff_bg_frame.py --input frames_sample18/ --output-dir diff_bg_frames/
 ```
 
-### 3. 绘图与运动学分析
+### 3. Plotting and kinematic analysis
 
 ```bash
-# 轨迹散点图
+# Trajectory scatter plot
 python plot.py --input drop_pixel_coords.csv --mode trajectory --confidence 0.3
-# 高度/速度/加速度（生成 height_velocity CSV）
+# Height/velocity/acceleration (generates height_velocity CSV)
 python plot.py --input drop_pixel_coords.csv --mode height_velocity
 ```
 
-### 4. 电荷计算
+### 4. Charge calculation
 
 ```bash
-python calc_uci.py --input height_velocity_sample18.csv        # 直接读速度
+python calc_uci.py --input height_velocity_sample18.csv        # reads velocity directly
 python calc_uci.py --input drop_pixel_coords.csv --method free_fall
 ```
 
-更多选项见 `python calc_uci.py --help`（电压、极板间距、温度、气压、油密度、标定像素等均可覆盖）。
+See `python calc_uci.py --help` for more options (voltage, plate spacing, temperature, pressure, oil density, calibration pixels, etc. are all overridable).
 
-## 标定说明
+## Calibration notes
 
-所有脚本的标定参数默认值集中在 `config.py`，也可用 CLI 覆盖：
+Default calibration parameters for all scripts are centralized in `config.py` and can be overridden via CLI:
 
-- `--ceiling-y-px / --floor-y-px`：图像中标定高度范围对应的顶部/底部 y 像素。
-- `--plate-spacing`：极板间距（米），兼作像素标定高度跨度。
+- `--ceiling-y-px / --floor-y-px`: top/bottom y pixels corresponding to the calibrated height range in the image.
+- `--plate-spacing`: plate spacing (m), also used as the pixel-calibration height span.
 
-**务必按你的实际实验装置设置这些值**，否则高度与电荷结果会失真。
+**Be sure to set these values to match your actual experimental setup**, otherwise the height and charge results will be skewed.

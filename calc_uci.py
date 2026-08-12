@@ -10,7 +10,7 @@ from config import Config
 # ==========================================
 # DEFAULT CONFIGURATION
 # CLI flags can override any of these.
-# 标定与物理常数统一取自 config.py，与 detect/plot 保持一致。
+# Calibration and physical constants are centralized in config.py, kept consistent with detect/plot.
 # ==========================================
 INPUT_CSV = "drop_pixel_coords.csv"
 METHOD = "free_fall"  # "free_fall" or "forced_down"

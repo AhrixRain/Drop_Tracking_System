@@ -1,9 +1,10 @@
-"""绘图与运动学分析：基于 detect.py 输出的坐标 CSV。
+"""Plotting and kinematic analysis, based on the coordinate CSV output by detect.py.
 
---mode trajectory       油滴轨迹散点图（按时间着色，可过滤低置信度/丢失点）
---mode height_velocity  高度/速度/加速度图，并输出 height_velocity CSV 供 calc_uci 使用
+--mode trajectory        Scatter plot of the drop trajectory (colored by time, filters
+                         low-confidence/lost points)
+--mode height_velocity   Height/velocity/acceleration plots and a height_velocity CSV for calc_uci
 
-用法示例：
+Usage examples:
     python plot.py --input drop_pixel_coords.csv --mode trajectory --confidence 0.3
     python plot.py --input drop_pixel_coords.csv --mode height_velocity
 """
@@ -11,7 +12,7 @@ import argparse
 import os
 
 import matplotlib
-matplotlib.use("Agg")  # 无显示环境下也能保存图片
+matplotlib.use("Agg")  # allow saving figures without a display
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -24,17 +25,17 @@ from utils import pixel_to_height
 def build_parser():
     parser = argparse.ArgumentParser(
         parents=[build_common_parser()],
-        description="绘制油滴轨迹或高度/速度/加速度曲线",
+        description="Plot oil-drop trajectory or height/velocity/acceleration curves",
     )
     parser.add_argument("--mode", choices=("trajectory", "height_velocity"), default="trajectory")
     parser.add_argument("--confidence", type=float, default=0.0,
-                        help="trajectory 模式的最低置信度")
-    parser.add_argument("--frame-width", type=int, default=1920, help="轨迹图 x 轴范围")
-    parser.add_argument("--frame-height", type=int, default=1080, help="轨迹图 y 轴范围")
-    parser.add_argument("--smoothing-window", type=int, default=11, help="S-G 平滑窗口（须为奇数）")
-    parser.add_argument("--poly-order", type=int, default=3, help="S-G 多项式阶数")
-    parser.add_argument("--moving-avg-window", type=int, default=10, help="二次滑动平均窗口")
-    parser.add_argument("--no-moving-avg", action="store_true", help="禁用二次滑动平均")
+                        help="Minimum confidence for trajectory mode")
+    parser.add_argument("--frame-width", type=int, default=1920, help="Trajectory plot x-axis range")
+    parser.add_argument("--frame-height", type=int, default=1080, help="Trajectory plot y-axis range")
+    parser.add_argument("--smoothing-window", type=int, default=11, help="S-G smoothing window (must be odd)")
+    parser.add_argument("--poly-order", type=int, default=3, help="S-G polynomial order")
+    parser.add_argument("--moving-avg-window", type=int, default=10, help="Secondary moving-average window")
+    parser.add_argument("--no-moving-avg", action="store_true", help="Disable the secondary moving average")
     return parser
 
 
@@ -51,7 +52,7 @@ def plot_trajectory(df, args, output_path):
         c=filtered["time_s"], cmap="viridis", s=15, alpha=0.8,
     )
     plt.xlim(0, args.frame_width)
-    plt.ylim(args.frame_height, 0)  # 反转 y，使顶部为 0
+    plt.ylim(args.frame_height, 0)  # invert y so the top is 0
     plt.title(f"Millikan Oil Drop Track (Confidence >= {args.confidence})")
     plt.xlabel("X (px)")
     plt.ylabel("Y (px)")
@@ -61,15 +62,15 @@ def plot_trajectory(df, args, output_path):
     plt.savefig(output_path, dpi=300, bbox_inches="tight")
 
     rejected = len(df[df["status"] != "lost"]) - len(filtered)
-    print(f"轨迹图已保存: {output_path}（按置信度 {args.confidence} 过滤掉 {rejected} 点）")
+    print(f"Trajectory plot saved: {output_path} (filtered out {rejected} points below confidence {args.confidence})")
 
 
 def plot_height_velocity(df, args, cfg, output_csv, output_plot):
-    """按时间分段，把像素坐标换算为高度，用 S-G 平滑求导得到速度/加速度。"""
+    """Segment by time, convert pixels to height, and use S-G smoothing derivatives for v/a."""
     df = df.dropna(subset=["y_px"]).copy()
     df = df.sort_values("time_s").reset_index(drop=True)
 
-    # 分段：按时间间隔（而非仅 frame_idx 断点），时间跳变超过 2 个中位步长视为新段
+    # Segment by time gaps (not just frame_idx breaks); a time jump over 2 median steps starts a new segment
     median_dt = np.median(np.diff(df["time_s"].values)) if len(df) > 1 else 0.0
     segment_break = max(median_dt * 2.0, 1e-9)
     df["segment_id"] = (df["time_s"].diff() > segment_break).cumsum()
@@ -126,8 +127,8 @@ def plot_height_velocity(df, args, cfg, output_csv, output_plot):
 
     plt.tight_layout()
     plt.savefig(output_plot, dpi=300)
-    print(f"高度/速度/加速度数据已保存: {output_csv}")
-    print(f"曲线图已保存: {output_plot}")
+    print(f"Height/velocity/acceleration data saved: {output_csv}")
+    print(f"Plots saved: {output_plot}")
 
 
 def main():
@@ -136,7 +137,7 @@ def main():
 
     input_csv = args.input or cfg.output_csv
     if not os.path.exists(input_csv):
-        raise FileNotFoundError(f"找不到坐标 CSV: {input_csv}")
+        raise FileNotFoundError(f"Cannot find coordinate CSV: {input_csv}")
 
     stem, _ = os.path.splitext(input_csv)
     if args.mode == "trajectory":

@@ -1,8 +1,9 @@
-"""油滴检测与追踪：视频/帧目录 → 每帧油滴坐标 CSV。
+"""Oil-drop detection and tracking: video/frame-dir → per-frame drop coordinate CSV.
 
-流程：中值背景建模 → 背景差分 → 阈值/形态学 → blob 检测 → 门控追踪。
+Pipeline: median background modeling → background subtraction → threshold/morphology
+→ blob detection → gated tracking.
 
-用法示例：
+Usage examples:
     python detect.py --input frames_sample18/ --output drop_pixel_coords.csv
     python detect.py --input movie.mp4 --output drop_pixel_coords.csv --fps 60
 """
@@ -20,26 +21,26 @@ from utils import create_median_background, iter_frames
 def build_parser():
     parser = argparse.ArgumentParser(
         parents=[build_common_parser()],
-        description="油滴检测与追踪：输出每帧油滴坐标 CSV",
+        description="Oil-drop detection and tracking: outputs per-frame drop coordinate CSV",
     )
     parser.add_argument("--bg-samples", type=int, default=None, dest="num_bg_samples",
-                        help="背景建模采样帧数")
+                        help="Number of frames sampled for background modeling")
     parser.add_argument("--threshold", type=int, default=None, dest="threshold_val",
-                        help="差分二值阈值，越小越灵敏")
+                        help="Binary subtraction threshold; lower is more sensitive")
     parser.add_argument("--min-area", type=int, default=None, dest="min_area")
     parser.add_argument("--max-area", type=int, default=None, dest="max_area")
     parser.add_argument("--circularity", type=float, default=None, dest="circularity_min",
-                        help="blob 最小圆形度")
+                        help="Minimum blob circularity")
     parser.add_argument("--gate-radius", type=float, default=None, dest="gate_radius_min_px",
-                        help="搜索门最小半径（像素）")
+                        help="Minimum search-gate radius (pixels)")
     parser.add_argument("--max-missed", type=int, default=None, dest="max_missed_frames",
-                        help="连续丢失多少帧后重置追踪")
+                        help="Consecutive missed frames before tracking resets")
     parser.add_argument("--ema-alpha", type=float, default=None, dest="ema_alpha",
-                        help="速度平滑系数 (0,1]，越大越跟随实测")
+                        help="Velocity smoothing factor (0,1]; larger follows measurement more")
     parser.add_argument("--reinit-rule", choices=("largest_blob", "highest_conf", "nearest_center"),
                         default=None, dest="reinit_rule",
-                        help="重置/初始化时选择目标 blob 的策略")
-    parser.add_argument("--no-bg-debug", action="store_true", help="不保存背景调试图")
+                        help="Strategy for choosing the target blob on (re)initialization")
+    parser.add_argument("--no-bg-debug", action="store_true", help="Do not save the background debug image")
     return parser
 
 
@@ -56,7 +57,7 @@ def compute_circularity(contour):
 
 
 def detect_candidates(bw, min_area, max_area, circularity_min, img_w, img_h):
-    """从二值图提取 blob 候选，并计算置信度与中心距离评分。"""
+    """Extract blob candidates from a binary image, scoring confidence and center distance."""
     contours, _ = cv2.findContours(bw, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     center_x, center_y = img_w / 2.0, img_h / 2.0
     sigma2 = (min(img_w, img_h) / 3.0) ** 2
@@ -85,7 +86,7 @@ def detect_candidates(bw, min_area, max_area, circularity_min, img_w, img_h):
 
 
 def pick_target(candidates, rule):
-    """按策略从候选中选出初始/重置目标。"""
+    """Choose the initial/reset target from candidates according to the rule."""
     if not candidates:
         return None
     if rule == "highest_conf":
@@ -103,35 +104,35 @@ def main():
 
     source = args.input or cfg.frames_dir
     if not os.path.exists(source):
-        raise FileNotFoundError(f"输入不存在: {source}")
+        raise FileNotFoundError(f"Input does not exist: {source}")
     output_csv = args.output or cfg.output_csv
     os.makedirs(os.path.dirname(os.path.abspath(output_csv)), exist_ok=True)
 
-    # 1. 读取全部灰度帧（图片目录已并行预读）
-    print(f"读取帧序列: {source}")
+    # 1. Read all grayscale frames (image dirs are prefetched in parallel)
+    print(f"Reading frame sequence: {source}")
     frames, times = [], []
     for _, time_s, gray in iter_frames(source, cfg.fps):
         frames.append(gray)
         times.append(time_s)
     if not frames:
-        raise FileNotFoundError(f"未从 {source} 读到任何帧")
+        raise FileNotFoundError(f"No frames read from {source}")
 
-    # 2. 中值背景建模
+    # 2. Median background modeling
     master_bg = create_median_background(frames, cfg.num_bg_samples)
     master_bg = cv2.GaussianBlur(master_bg, cfg.blur_size, 0)
     if not args.no_bg_debug:
         bg_debug = os.path.join(os.path.dirname(os.path.abspath(output_csv)), "debug_master_background.png")
         cv2.imwrite(bg_debug, master_bg)
-        print(f"背景模型已保存: {bg_debug}")
+        print(f"Background model saved: {bg_debug}")
 
-    # 3. 逐帧差分 + 检测 + 门控追踪
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))  # 提出循环，避免每帧重建
+    # 3. Per-frame subtraction + detection + gated tracking
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))  # hoisted out of the loop
     height, width = master_bg.shape
 
     track_state = "UNINITIALIZED"
     missed = 0
     last_pos = None
-    velocity_s = (0.0, 0.0)  # EMA 平滑速度
+    velocity_s = (0.0, 0.0)  # EMA-smoothed velocity
     init_stable = 0
     rows = []
 
@@ -154,15 +155,15 @@ def main():
                 chosen, status = target, "ok_init"
         else:
             speed = math.hypot(*velocity_s)
-            gate = max(cfg.gate_radius_min_px, 8.0 + 0.8 * speed)  # 自适应门
-            search_gate = gate * (1.5 if 0 < missed <= 5 else 1.0)  # 短暂丢失时放大搜索
+            gate = max(cfg.gate_radius_min_px, 8.0 + 0.8 * speed)  # adaptive gate
+            search_gate = gate * (1.5 if 0 < missed <= 5 else 1.0)  # widen search on brief misses
             predicted = (last_pos[0] + velocity_s[0], last_pos[1] + velocity_s[1])
             valid = [c for c in candidates
                      if get_distance((c["cx"], c["cy"]), predicted) <= search_gate]
             if valid:
                 chosen = min(valid, key=lambda c: get_distance((c["cx"], c["cy"]), predicted))
                 measured = (chosen["cx"] - last_pos[0], chosen["cy"] - last_pos[1])
-                if init_stable < 3:  # 前几帧直接采用，让速度先收敛
+                if init_stable < 3:  # use raw velocity for the first frames so it converges
                     velocity_s = measured
                     init_stable += 1
                 else:
@@ -174,7 +175,7 @@ def main():
                 status = "ok_track"
             else:
                 missed += 1
-                decay = 0.9 ** missed  # 速度衰减，避免长丢失后外推越飞越远
+                decay = 0.9 ** missed  # decay velocity so extrapolation doesn't drift far after long misses
                 velocity_s = (velocity_s[0] * decay, velocity_s[1] * decay)
                 last_pos = predicted
                 status = "lost"
@@ -192,7 +193,7 @@ def main():
         writer.writerow(["frame_idx", "time_s", "x_px", "y_px", "area_px2", "circularity", "confidence", "status"])
         writer.writerows(rows)
 
-    print(f"追踪完成，共 {len(rows)} 帧，结果保存至 {output_csv}")
+    print(f"Tracking finished: {len(rows)} frames, results saved to {output_csv}")
 
 
 if __name__ == "__main__":
